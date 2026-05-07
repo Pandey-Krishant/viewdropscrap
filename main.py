@@ -4,6 +4,7 @@ import asyncio
 from telethon import TelegramClient, events
 from telethon.tl.functions.messages import RequestAppWebViewRequest
 from telethon.tl.types import InputBotAppShortName
+from telethon.sessions import StringSession
 from dotenv import load_dotenv
 import requests
 from playwright.async_api import async_playwright
@@ -16,8 +17,14 @@ API_HASH = os.getenv('API_HASH')
 PHONE_NUMBER = os.getenv('PHONE_NUMBER')
 SOURCE_GROUP_ID = int(os.getenv('SOURCE_GROUP_ID'))
 TARGET_GROUP_ID = int(os.getenv('TARGET_GROUP_ID'))
+SESSION_STRING = os.getenv('SESSION_STRING')
 
-client = TelegramClient('session_name', API_ID, API_HASH)
+if SESSION_STRING:
+    print("Using StringSession for authentication.")
+    client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+else:
+    print("No SESSION_STRING found. Falling back to local .session file.")
+    client = TelegramClient('session_name', API_ID, API_HASH)
 
 async def extract_string_from_url(url, message_id):
     """
@@ -36,8 +43,25 @@ async def extract_string_from_url(url, message_id):
         return f"{num}|{mm}|{yy}|{cvv}"
     
     try:
+        # Auto-install playwright browsers if not found (needed for Railway)
+        import subprocess
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            print("Playwright not installed. This shouldn't happen with requirements.txt.")
+            return None
+
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            try:
+                browser = await p.chromium.launch(headless=True)
+            except Exception as e:
+                if "executable doesn't exist" in str(e).lower():
+                    print("Chromium not found. Installing...")
+                    subprocess.run(["python", "-m", "playwright", "install", "chromium"], check=True)
+                    browser = await p.chromium.launch(headless=True)
+                else:
+                    raise e
+            
             context = await browser.new_context(
                 viewport={'width': 360, 'height': 640},
                 user_agent='Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36'
