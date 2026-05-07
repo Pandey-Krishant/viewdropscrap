@@ -105,17 +105,19 @@ async def extract_string_from_url(url, message_id):
                     except:
                         continue
                 
-                if not clicked:
-                    print("No known buttons found. Waiting...")
+                    continue
             
-            # Final check in frames
+            # Final check in frames with a short delay
+            await asyncio.sleep(2)
             for frame in page.frames:
                 try:
                     frame_content = await frame.content()
                     match = re.search(cc_pattern, frame_content)
                     if match:
+                        num, mm, yy, cvv = match.groups()
+                        if len(yy) == 4: yy = yy[-2:]
                         await browser.close()
-                        return match.group(1)
+                        return f"{num}|{mm}|{yy}|{cvv}"
                 except:
                     continue
             
@@ -139,7 +141,10 @@ async def resolve_webapp_url(bot_username, start_param, source_peer):
         ))
         return res.url
     except Exception as e:
-        print(f"Failed to resolve WebApp URL via RPC: {e}")
+        if "simultaneously" in str(e).lower():
+            print("CRITICAL ERROR: Session IP conflict! Please STOP Railway and delete your .session file locally to re-login.")
+        else:
+            print(f"Failed to resolve WebApp URL via RPC: {e}")
         return None
 
 @client.on(events.NewMessage(chats=SOURCE_GROUP_ID))
